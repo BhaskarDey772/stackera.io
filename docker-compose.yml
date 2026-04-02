@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  crypto-ws:
+    build: .
+    container_name: crypto-ws
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - MAX_CONNECTIONS=10
+    restart: unless-stopped

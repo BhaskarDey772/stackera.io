@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crypto Price Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: #f0f6fc;
+    }
+
+    #status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      transition: color 0.3s;
+    }
+
+    #status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #6e7681;
+      transition: background 0.3s;
+    }
+
+    #status.connected #status-dot { background: #3fb950; animation: pulse 1.8s infinite; }
+    #status.connected { color: #3fb950; }
+    #status.disconnected #status-dot { background: #f85149; }
+    #status.disconnected { color: #f85149; }
+    #status.connecting #status-dot { background: #d29922; animation: pulse 0.8s infinite; }
+    #status.connecting { color: #d29922; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ---- Live Cards ---- */
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #8b949e;
+      margin-bottom: 16px;
+    }
+
+    #cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px 24px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover { border-color: #58a6ff; }
+
+    .card-symbol {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: #8b949e;
+      margin-bottom: 8px;
+    }
+
+    .card-price {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #f0f6fc;
+      transition: color 0.4s;
+      margin-bottom: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .card-price.flash-up   { color: #3fb950; }
+    .card-price.flash-down { color: #f85149; }
+
+    .card-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.78rem;
+    }
+
+    .card-change {
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+
+    .card-change.up   { color: #3fb950; background: rgba(63, 185, 80, 0.12); }
+    .card-change.down { color: #f85149; background: rgba(248, 81, 73, 0.12); }
+
+    .card-time { color: #6e7681; }
+
+    .card-bar {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: #30363d;
+      overflow: hidden;
+    }
+
+    .card-bar-fill {
+      height: 100%;
+      width: 0;
+      transition: width 0.6s ease;
+    }
+
+    .card-bar-fill.up   { background: #3fb950; }
+    .card-bar-fill.down { background: #f85149; }
+
+    /* ---- REST Query ---- */
+    #rest-section {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 40px;
+    }
+
+    #rest-section h2 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #f0f6fc;
+      margin-bottom: 16px;
+    }
+
+    .rest-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .rest-row select,
+    .rest-row button {
+      font-size: 0.85rem;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      background: #0d1117;
+      color: #e6edf3;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .rest-row select:focus,
+    .rest-row button:focus { outline: none; border-color: #58a6ff; }
+
+    .rest-row button {
+      background: #1f6feb;
+      border-color: #1f6feb;
+      font-weight: 600;
+    }
+    .rest-row button:hover { background: #388bfd; border-color: #388bfd; }
+
+    #rest-result {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.8rem;
+      color: #79c0ff;
+      white-space: pre;
+      overflow-x: auto;
+      min-height: 48px;
+      line-height: 1.6;
+    }
+
+    /* ---- Live Feed Log ---- */
+    #feed-section {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    #feed-section h2 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #f0f6fc;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #clear-btn {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: transparent;
+      color: #8b949e;
+      cursor: pointer;
+    }
+    #clear-btn:hover { border-color: #8b949e; color: #e6edf3; }
+
+    #feed {
+      height: 280px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 0.78rem;
+      line-height: 1.7;
+      scrollbar-width: thin;
+      scrollbar-color: #30363d transparent;
+    }
+
+    .feed-entry {
+      padding: 2px 0;
+      border-bottom: 1px solid #161b22;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; } }
+
+    .feed-entry .fe-time  { color: #6e7681; }
+    .feed-entry .fe-sym   { color: #79c0ff; font-weight: 600; }
+    .feed-entry .fe-price { color: #f0f6fc; }
+    .feed-entry .fe-chg.up   { color: #3fb950; }
+    .feed-entry .fe-chg.down { color: #f85149; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Crypto Price Dashboard</h1>
+  <div id="status" class="connecting">
+    <span id="status-dot"></span>
+    <span id="status-text">Connecting…</span>
+  </div>
+</header>
+
+<p class="section-title">Live Prices</p>
+<div id="cards"></div>
+
+<div id="rest-section">
+  <h2>REST API — GET /price</h2>
+  <div class="rest-row">
+    <select id="rest-symbol">
+      <option value="btcusdt">BTC/USDT</option>
+      <option value="ethusdt">ETH/USDT</option>
+      <option value="bnbusdt">BNB/USDT</option>
+      <option value="all">All symbols</option>
+    </select>
+    <button id="rest-fetch">Fetch</button>
+  </div>
+  <pre id="rest-result">Click "Fetch" to query the REST API…</pre>
+</div>
+
+<div id="feed-section">
+  <h2>
+    Live Feed
+    <button id="clear-btn">Clear</button>
+  </h2>
+  <div id="feed"></div>
+</div>
+
+<script>
+  const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT'];
+  const cardsEl  = document.getElementById('cards');
+  const feedEl   = document.getElementById('feed');
+  const statusEl = document.getElementById('status');
+  const statusTxt = document.getElementById('status-text');
+
+  // ---- Cards ----
+  const cards = {};
+  for (const sym of SYMBOLS) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-symbol">${sym.replace('USDT', ' / USDT')}</div>
+      <div class="card-price" id="price-${sym}">—</div>
+      <div class="card-meta">
+        <span class="card-change" id="chg-${sym}">—</span>
+        <span class="card-time"  id="time-${sym}">—</span>
+      </div>
+      <div class="card-bar"><div class="card-bar-fill" id="bar-${sym}"></div></div>
+    `;
+    cardsEl.appendChild(card);
+    cards[sym] = card;
+  }
+
+  let prevPrices = {};
+
+  function updateCard(data) {
+    const { symbol, price, change_pct, timestamp } = data;
+    const priceEl = document.getElementById(`price-${symbol}`);
+    const chgEl   = document.getElementById(`chg-${symbol}`);
+    const timeEl  = document.getElementById(`time-${symbol}`);
+    const barEl   = document.getElementById(`bar-${symbol}`);
+    if (!priceEl) return;
+
+    const num = parseFloat(price);
+    const chg = parseFloat(change_pct);
+    const prev = prevPrices[symbol];
+    const dir = prev === undefined ? 'up' : num >= prev ? 'up' : 'down';
+    prevPrices[symbol] = num;
+
+    // Price with flash
+    priceEl.textContent = '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    priceEl.classList.remove('flash-up', 'flash-down');
+    void priceEl.offsetWidth; // reflow
+    priceEl.classList.add(dir === 'up' ? 'flash-up' : 'flash-down');
+    setTimeout(() => priceEl.classList.remove('flash-up', 'flash-down'), 600);
+
+    // Change badge
+    chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+    chgEl.className = 'card-change ' + (chg >= 0 ? 'up' : 'down');
+
+    // Timestamp
+    timeEl.textContent = new Date(timestamp).toLocaleTimeString();
+
+    // Bar (map -5%..+5% to 0%..100%)
+    const pct = Math.min(100, Math.max(0, ((chg + 5) / 10) * 100));
+    barEl.style.width = pct + '%';
+    barEl.className = 'card-bar-fill ' + (chg >= 0 ? 'up' : 'down');
+  }
+
+  // ---- Live Feed ----
+  const MAX_FEED = 120;
+  function addFeedEntry(data) {
+    const { symbol, price, change_pct, timestamp } = data;
+    const chg = parseFloat(change_pct);
+    const entry = document.createElement('div');
+    entry.className = 'feed-entry';
+    entry.innerHTML =
+      `<span class="fe-time">${new Date(timestamp).toLocaleTimeString()}</span>  ` +
+      `<span class="fe-sym">${symbol}</span>  ` +
+      `<span class="fe-price">$${parseFloat(price).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>  ` +
+      `<span class="fe-chg ${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span>`;
+    feedEl.prepend(entry);
+    // trim
+    while (feedEl.children.length > MAX_FEED) feedEl.lastElementChild.remove();
+  }
+
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    feedEl.innerHTML = '';
+  });
+
+  // ---- WebSocket ----
+  function setStatus(state, text) {
+    statusEl.className = state;
+    statusTxt.textContent = text;
+  }
+
+  function connectWS() {
+    setStatus('connecting', 'Connecting…');
+    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${wsProtocol}//${location.host}/ws`);
+
+    ws.addEventListener('open', () => setStatus('connected', 'Live'));
+
+    ws.addEventListener('message', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        updateCard(data);
+        addFeedEntry(data);
+      } catch {}
+    });
+
+    ws.addEventListener('close', () => {
+      setStatus('disconnected', 'Disconnected — retrying…');
+      setTimeout(connectWS, 3000);
+    });
+
+    ws.addEventListener('error', () => ws.close());
+  }
+
+  connectWS();
+
+  // ---- REST Fetch ----
+  document.getElementById('rest-fetch').addEventListener('click', async () => {
+    const sym = document.getElementById('rest-symbol').value;
+    const resultEl = document.getElementById('rest-result');
+    resultEl.textContent = 'Loading…';
+    try {
+      const res = await fetch(`/price?symbol=${sym}`);
+      const json = await res.json();
+      resultEl.textContent = JSON.stringify(json, null, 2);
+    } catch (err) {
+      resultEl.textContent = 'Error: ' + err.message;
+    }
+  });
+</script>
+</body>
+</html>
